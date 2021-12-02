@@ -55,15 +55,15 @@ def plot_axis(axis, x, y, label=None):
     return axis
 
 
-def plot_iv(dut, data, sampling_frequency, show=None):
+def plot_iv(data, sampling_frequency, show=None):
     x = np.arange(len(data), dtype=float)
     x *= 1.0 / sampling_frequency
     f = plt.figure()
 
     ax_i = f.add_subplot(2, 1, 1)
-    plot_axis(ax_i, x, data[:, 0], label='DUT=' + str(dut) + ' Current (A)')
+    plot_axis(ax_i, x, data[:, 0], label='Current (A)')
     ax_v = f.add_subplot(2, 1, 2, sharex=ax_i)
-    plot_axis(ax_v, x, data[:, 1], label='DUT=' + str(dut) + ' Voltage (V)')
+    plot_axis(ax_v, x, data[:, 1], label='Voltage (V)')
 
     if show is None or bool(show):
         plt.show()
@@ -79,6 +79,8 @@ def str2val (s):
         val /= 1000
     elif unit == 'µA':
         val /= 1000000
+    elif unit == 'nA':
+        val /= 1000000000
     return [val, str(res[0]) + ' ' + unit]
 
 def switch (js, idx, enable):
@@ -96,16 +98,18 @@ def dump (args, stat):
     else:
         print (Fore.RED, end='')
         
-    print ('[' + str(stat['dut']) + '] Avg voltage=' + fmt.format_data(stat['voltage']) + 'V')
-    print ('[' + str(stat['dut']) + '] Voltage sag=' + fmt.format_data(stat['vpp']) + 'V')
-    print ('[' + str(stat['dut']) + '] Avg current=' + fmt.format_data(stat['current']) + 'A')
+    print ('[' + str(stat['dut']) + '] Avg voltage=' + fmt.format_data(stat['v_avg']) + 'V')
+    print ('[' + str(stat['dut']) + '] Voltage sag=' + fmt.format_data(stat['v_pp']) + 'V')
+    print ('[' + str(stat['dut']) + '] Avg current=' + fmt.format_data(stat['i_avg']) + 'A')
+    print ('[' + str(stat['dut']) + '] Max current=' + fmt.format_data(stat['i_max']) + 'A')
     print (Fore.RESET)
         
-def record (stats, n, dut, voltage, vpp, current):
-    stats[n]['voltage'] = voltage
-    stats[n]['current'] = current
-    stats[n]['vpp'] = vpp
-    stats[n]['dut'] = dut
+def record (n, dut, stats, s):
+    stats[n]['v_avg'] = s['signals']['voltage']['µ']['value']
+    stats[n]['v_pp']  = s['signals']['voltage']['p2p']['value']
+    stats[n]['i_avg'] = s['signals']['current']['µ']['value']
+    stats[n]['i_max'] = s['signals']['current']['max']['value']
+    stats[n]['dut']   = dut
     
 def run(args):
 
@@ -184,7 +188,8 @@ def run(args):
                 fmt = ticker.EngFormatter()
                 
                 # Record failure
-                record (stats, idx, active, voltage, 0, current)
+                stats[idx]['v_avg'] = voltage
+                stats[idx]['i_avg'] = current
                 stats[idx]['pass'] = False
 
                 print (Fore.RED + '[' + str(stats[idx]['dut']) + '] Avg current=' +
@@ -223,17 +228,11 @@ def run(args):
             t_end = stop / js.stream_buffer.output_sampling_frequency
             s = stats_to_api(s, t_start, t_end)
 
-            # Get stats
-            voltage = s['signals']['voltage']['µ']['value']
-            p2p = s['signals']['voltage']['p2p']['value']
-            current = s['signals']['current']['µ']['value']
-            variance = s['signals']['current']['σ2']['value']
-
             # Record stats
-            record (stats, idx, active, voltage, p2p, current)
+            record (idx, active, stats, s)
 
             # Check PASS/FAIL
-            if (current < args.min) or (current > args.max):
+            if (stats[idx]['i_avg'] < args.min) or (stats[idx]['i_avg'] > args.max):
 
                 # Save failure
                 stats[idx]['pass'] = False
@@ -254,7 +253,7 @@ def run(args):
 
             # Plot
             if args.plot:
-                plot_iv (active, buf, raw['time']['sampling_frequency']['value'], show=True)
+                plot_iv (buf, raw['time']['sampling_frequency']['value'], show=True)
 
         # Turn both off
         switch (js, 0, False)
