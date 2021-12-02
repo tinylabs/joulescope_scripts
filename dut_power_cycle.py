@@ -177,7 +177,6 @@ def run(args):
                 switch (js, active, True)
                     
             # Delay and do quick read
-            time.sleep (0.001)
             data = js.read(contiguous_duration=0.001)
             current, voltage = data[-1, :]
 
@@ -242,6 +241,9 @@ def run(args):
 
                     # Dump
                     dump (args, stats[idx])                    
+
+                    # Plot
+                    plot_iv (buf, raw['time']['sampling_frequency']['value'], show=True)
                     break
                     
             else:
@@ -260,15 +262,21 @@ def run(args):
         switch (js, 1, False)
 
         # Display results
-        dut = [0, 0]
+        passed = [0, 0]
+        failed = [0, 0]
         for stat in stats:
-            if stat['pass']:
-                dut[stat['dut']] += 1
+            if 'pass' in stat:
+                if stat['pass']:
+                    passed[stat['dut']] += 1
+                else:
+                    failed[stat['dut']] += 1
         if args.dut == 'both':
             for n in range (len(dut)):
-                print ('DUT[' + str(n) + '] PASS=' + str(dut[n]) + '/' + str(int(args.cnt / 2)))
+                print ('DUT[' + str(n) + '] PASS=' + str(passed[n]) + ' FAIL=' +
+                       str(failed[n]) + ' TOTAL=' + str(int(args.cnt / 2)))
         else:
-            print ('DUT[' + str(active) + '] PASS=' + str(dut[active]) + '/' + str(int(args.cnt / 2)))
+            print ('DUT[' + str(active) + '] PASS=' + str(passed[active]) + ' FAIL=' +
+                   str(failed[active]) + ' TOTAL=' + str(int(args.cnt / 2)))
         return 0
 
 
