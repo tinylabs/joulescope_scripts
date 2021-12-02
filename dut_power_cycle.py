@@ -285,9 +285,7 @@ if __name__ == '__main__':
     args.max = str2val (args.max)[0]
     args.on = float (args.on)
 
-    # Create regex to parse range
-    parse_range = re.compile("([0-9]+\.*[0-9]*)([a-zA-Z]+)")
-    
+    # Parse current range - check against min/max
     if not args.urange:
         args.urange = 'auto'
     elif args.urange != 'auto':
