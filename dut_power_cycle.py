@@ -10,6 +10,7 @@ from joulescope.stream_buffer import stats_to_api
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.collections
+from matplotlib import ticker
 import time
 import re
 import argparse
@@ -88,14 +89,16 @@ def switch (js, idx, enable):
     js.parameter_set ('gpo' + str (idx), val)
 
 def dump (args, stat):
+    fmt = ticker.EngFormatter()
+
     if stat['pass']:
         print (Fore.GREEN, end='')
     else:
         print (Fore.RED, end='')
         
-    print ('[' + str(stat['dut']) + '] Avg voltage=' + str (stat['voltage']))
-    print ('[' + str(stat['dut']) + '] Voltage sag=' + str (stat['vpp']))
-    print ('[' + str(stat['dut']) + '] Avg current=' + str (stat['current']))
+    print ('[' + str(stat['dut']) + '] Avg voltage=' + fmt.format_data(stat['voltage']) + 'V')
+    print ('[' + str(stat['dut']) + '] Voltage sag=' + fmt.format_data(stat['vpp']) + 'V')
+    print ('[' + str(stat['dut']) + '] Avg current=' + fmt.format_data(stat['current']) + 'A')
     print (Fore.RESET)
         
 def record (stats, n, dut, voltage, vpp, current):
@@ -114,8 +117,11 @@ def run(args):
     with scan_require_one(config='auto') as js:
         js.parameter_set('sensor_power', 'on')
         js.parameter_set ('v_range', args.vrange) 
-        js.parameter_set ('i_range', args.urange)
         js.parameter_set('io_voltage', '5.0V')
+        if args.delay:
+            js.parameter_set ('i_range', 'auto')
+        else:
+            js.parameter_set ('i_range', args.urange)
 
         # Turn both off
         switch (js, 0, False)
@@ -138,6 +144,10 @@ def run(args):
         # every other cycle will be off cycle
         args.cnt *= 2
 
+        # Calculate overload current
+        # 100mA if delay enabled
+        current_overload = 0.1 if args.delay else args.urange_val
+        
         # Loop over range
         for n in range (args.cnt):
 
@@ -166,21 +176,30 @@ def run(args):
             time.sleep (0.001)
             data = js.read(contiguous_duration=0.001)
             current, voltage = data[-1, :]
-                
-            # Start device read
-            quit_ = False
-            js.start (stop_fn=on_stop, contiguous_duration=args.on)
 
             # Skip if current if too high
-            if (args.urange != 'auto') and (current >= args.urange_val - (args.urange_val * 0.01)):
+            if (args.urange != 'auto') and (current >= current_overload):
 
+                # Use eng formatter
+                fmt = ticker.EngFormatter()
+                
                 # Record failure
                 record (stats, idx, active, voltage, 0, current)
                 stats[idx]['pass'] = False
 
                 print (Fore.RED + '[' + str(stats[idx]['dut']) + '] Avg current=' +
-                       str (current) + ' LIMIT(' + args.urange + ')' + Fore.RESET)
+                       fmt.format_data (current) + 'A LIMIT(' + args.urange + ')' + Fore.RESET)
                 continue
+                
+            # if delay then sleep and change range
+            if args.delay:
+                time.sleep (args.delay)
+                js.parameter_set ('i_range', args.urange)
+
+            # Start device read
+            quit_ = False
+            js.start (stop_fn=on_stop, contiguous_duration=args.on)
+            #js.start (stop_fn=on_stop, duration=args.on)
                 
             # Wait until finished
             while not quit_:
@@ -212,7 +231,7 @@ def run(args):
 
             # Record stats
             record (stats, idx, active, voltage, p2p, current)
-                
+
             # Check PASS/FAIL
             if (current < args.min) or (current > args.max):
 
@@ -223,10 +242,7 @@ def run(args):
                 if args.stop:
 
                     # Dump
-                    dump (args, stats[idx])
-                    
-                    # Plot
-                    plot_iv (active, buf, raw['time']['sampling_frequency']['value'], show=True)
+                    dump (args, stats[idx])                    
                     break
                     
             else:
@@ -235,6 +251,10 @@ def run(args):
             # Dump stats if requested
             if args.dump:
                 dump (args, stats[idx])
+
+            # Plot
+            if args.plot:
+                plot_iv (active, buf, raw['time']['sampling_frequency']['value'], show=True)
 
         # Turn both off
         switch (js, 0, False)
@@ -261,19 +281,20 @@ if __name__ == '__main__':
     # Add arguments
     parser.add_argument ('--on', help='On time in seconds (float)', required=True)
     parser.add_argument ('--off', help='Off time in seconds (float)')
+    parser.add_argument ('--delay', help='Delay time in seconds before sampling (float)')
     parser.add_argument ('--min', help='Min acceptable current over window (float)')
     parser.add_argument ('--max', help='Max acceptable current over window (float)')
     parser.add_argument ('--cnt', help='Cycles to run')
     parser.add_argument ('--dut', help='DUT to test 0/1/both (default=both)')
     parser.add_argument ('--stop', help='Stop on first failure', action='store_true')
     parser.add_argument ('--dump', help='Dump stats', action='store_true')
+    parser.add_argument ('--plot', help='Plot stats', action='store_true')
 
     # Parameters for joulescope
     parser.add_argument ('--vrange', help='5V/15V')
     parser.add_argument ('--urange', help='auto/10A/2A/180mA/18mA/1.8mA/180uA/18uA')
     parser.add_argument ('--urange_val', default=0.0, help=argparse.SUPPRESS)
     parser.add_argument ('--urange_unit', default='', help=argparse.SUPPRESS)
-
 
     # Parse args
     args = parser.parse_args ()
@@ -287,23 +308,28 @@ if __name__ == '__main__':
         args.vrange = '5V'
     if not args.min:
         args.min = '0A'
-    if not args.max:
-        args.max = '10A'
     if not args.off:
         args.off = 0.2
-        
+    if args.max:
+        args.max = str2val (args.max)[0]
+
     args.off = float (args.off)
     args.cnt = int (args.cnt)
     args.min = str2val (args.min)[0]
-    args.max = str2val (args.max)[0]
     args.on = float (args.on)
-
+    if args.delay:
+        args.delay = float (args.delay)
+    
     # Parse current range - check against min/max
     if not args.urange:
         args.urange = 'auto'
+        if not args.max:
+            args.max = 10.0
     elif args.urange != 'auto':
-        (args.urange_val, args.urange) = str2val (args.urange)        
-        if (args.max > args.urange_val) or (args.min > args.urange_val):
+        (args.urange_val, args.urange) = str2val (args.urange)
+        if not args.max:
+            args.max = args.urange_val
+        if not args.delay and ((args.max > args.urange_val) or (args.min > args.urange_val)):
             print ('urange invalid with MIN/MAX')
             exit (-1)
             
