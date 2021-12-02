@@ -88,12 +88,15 @@ def switch (js, idx, enable):
     js.parameter_set ('gpo' + str (idx), val)
 
 def dump (args, stat):
+    if stat['pass']:
+        print (Fore.GREEN, end='')
+    else:
+        print (Fore.RED, end='')
+        
     print ('[' + str(stat['dut']) + '] Avg voltage=' + str (stat['voltage']))
     print ('[' + str(stat['dut']) + '] Voltage sag=' + str (stat['vpp']))
-    if (stat['current'] < args.min) or (stat['current'] > args.max):
-        print (Fore.RED + '[' + str(stat['dut']) + '] Avg current=' + str (stat['current']) + Fore.RESET)
-    else:
-        print (Fore.GREEN + '[' + str(stat['dut']) + '] Avg current=' + str (stat['current']) + Fore.RESET)
+    print ('[' + str(stat['dut']) + '] Avg current=' + str (stat['current']))
+    print (Fore.RESET)
         
 def record (stats, n, dut, voltage, vpp, current):
     stats[n]['voltage'] = voltage
@@ -209,8 +212,6 @@ def run(args):
 
             # Record stats
             record (stats, idx, active, voltage, p2p, current)
-            if args.dump:
-                dump (args, stats[idx])
                 
             # Check PASS/FAIL
             if (current < args.min) or (current > args.max):
@@ -222,8 +223,7 @@ def run(args):
                 if args.stop:
 
                     # Dump
-                    if not args.dump:
-                        dump (args, stats[idx])
+                    dump (args, stats[idx])
                     
                     # Plot
                     plot_iv (active, buf, raw['time']['sampling_frequency']['value'], show=True)
@@ -232,11 +232,24 @@ def run(args):
             else:
                 stats[idx]['pass'] = True
 
+            # Dump stats if requested
+            if args.dump:
+                dump (args, stats[idx])
+
         # Turn both off
         switch (js, 0, False)
         switch (js, 1, False)
-        
+
         # Display results
+        dut = [0, 0]
+        for stat in stats:
+            if stat['pass']:
+                dut[stat['dut']] += 1
+        if args.dut == 'both':
+            for n in range (len(dut)):
+                print ('DUT[' + str(n) + '] PASS=' + str(dut[n]) + '/' + str(int(args.cnt / 2)))
+        else:
+            print ('DUT[' + str(active) + '] PASS=' + str(dut[active]) + '/' + str(int(args.cnt / 2)))
         return 0
 
 
