@@ -191,9 +191,9 @@ def run(args):
                 stats[idx]['v_avg'] = voltage
                 stats[idx]['i_avg'] = current
                 stats[idx]['pass'] = False
-
+                stats[idx]['dut'] = active                
                 print (Fore.RED + '[' + str(stats[idx]['dut']) + '] Avg current=' +
-                       fmt.format_data (current) + 'A LIMIT(' + args.urange + ')' + Fore.RESET)
+                       fmt.format_data (current) + 'A LIMIT(' + args.urange + ')\n' + Fore.RESET)
                 continue
                 
             # if delay then sleep and change range
