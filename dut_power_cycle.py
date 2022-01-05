@@ -125,7 +125,7 @@ def run(args):
         if args.delay:
             js.parameter_set ('i_range', 'auto')
         else:
-            js.parameter_set ('i_range', args.urange)
+            js.parameter_set ('i_range', args.irange)
 
         # Turn both off
         switch (js, 0, False)
@@ -150,7 +150,7 @@ def run(args):
 
         # Calculate overload current
         # 100mA if delay enabled
-        current_overload = 0.1 if args.delay or (args.urange == 'auto') else args.urange_val
+        current_overload = 0.1 if args.delay or (args.irange == 'auto') else args.irange_val
         
         # Loop over range
         for n in range (args.cnt):
@@ -192,13 +192,14 @@ def run(args):
                 stats[idx]['pass'] = False
                 stats[idx]['dut'] = active                
                 print (Fore.RED + '[' + str(stats[idx]['dut']) + '] Avg current=' +
-                       fmt.format_data (current) + 'A LIMIT(' + fmt.format_data (current_overload) + 'A)\n' + Fore.RESET)
+                       fmt.format_data (current) + 'A LIMIT(' +
+                       fmt.format_data (current_overload) + 'A)\n' + Fore.RESET)
                 continue
                 
             # if delay then sleep and change range
             if args.delay:
                 time.sleep (args.delay)
-                js.parameter_set ('i_range', args.urange)
+                js.parameter_set ('i_range', args.irange)
 
             # Start device read
             quit_ = False
@@ -208,6 +209,10 @@ def run(args):
             # Wait until finished
             while not quit_:
                 time.sleep (0.01)
+
+            # Set range back to auto
+            if args.delay:
+                js.parameter_set ('i_range', 'auto')
 
             # Get sample ID range
             start, stop = js.stream_buffer.sample_id_range
@@ -299,9 +304,10 @@ if __name__ == '__main__':
 
     # Parameters for joulescope
     parser.add_argument ('--vrange', help='5V/15V')
-    parser.add_argument ('--urange', help='auto/10A/2A/180mA/18mA/1.8mA/180uA/18uA')
-    parser.add_argument ('--urange_val', default=0.0, help=argparse.SUPPRESS)
-    parser.add_argument ('--urange_unit', default='', help=argparse.SUPPRESS)
+    parser.add_argument ('--irange', help='auto/10A/2A/180mA/18mA/1.8mA/180uA/18uA')
+    # Internal only - do not use
+    parser.add_argument ('--irange_val', default=0.0, help=argparse.SUPPRESS)
+    parser.add_argument ('--irange_unit', default='', help=argparse.SUPPRESS)
 
     # Parse args
     args = parser.parse_args ()
@@ -328,16 +334,16 @@ if __name__ == '__main__':
         args.delay = float (args.delay)
     
     # Parse current range - check against min/max
-    if not args.urange:
-        args.urange = 'auto'
+    if not args.irange:
+        args.irange = 'auto'
         if not args.max:
             args.max = 10.0
-    elif args.urange != 'auto':
-        (args.urange_val, args.urange) = str2val (args.urange)
+    elif args.irange != 'auto':
+        (args.irange_val, args.irange) = str2val (args.irange)
         if not args.max:
-            args.max = args.urange_val
-        if not args.delay and ((args.max > args.urange_val) or (args.min > args.urange_val)):
-            print ('urange invalid with MIN/MAX')
+            args.max = args.irange_val
+        if not args.delay and ((args.max > args.irange_val) or (args.min > args.irange_val)):
+            print ('irange invalid with MIN/MAX')
             exit (-1)
             
     # Run test
