@@ -150,7 +150,7 @@ def run(args):
 
         # Calculate overload current
         # 100mA if delay enabled
-        current_overload = 0.1 if args.delay else args.urange_val
+        current_overload = 0.1 if args.delay or (args.urange == 'auto') else args.urange_val
         
         # Loop over range
         for n in range (args.cnt):
@@ -181,7 +181,7 @@ def run(args):
             current, voltage = data[-1, :]
 
             # Skip if current if too high
-            if (args.urange != 'auto') and (current >= current_overload):
+            if current >= current_overload:
 
                 # Use eng formatter
                 fmt = ticker.EngFormatter()
@@ -192,7 +192,7 @@ def run(args):
                 stats[idx]['pass'] = False
                 stats[idx]['dut'] = active                
                 print (Fore.RED + '[' + str(stats[idx]['dut']) + '] Avg current=' +
-                       fmt.format_data (current) + 'A LIMIT(' + args.urange + ')\n' + Fore.RESET)
+                       fmt.format_data (current) + 'A LIMIT(' + fmt.format_data (current_overload) + 'A)\n' + Fore.RESET)
                 continue
                 
             # if delay then sleep and change range
@@ -250,7 +250,7 @@ def run(args):
                 stats[idx]['pass'] = True
 
             # Dump stats if requested
-            if args.dump:
+            if args.stat:
                 dump (args, stats[idx])
 
             # Plot
@@ -271,7 +271,7 @@ def run(args):
                 else:
                     failed[stat['dut']] += 1
         if args.dut == 'both':
-            for n in range (len(dut)):
+            for n in range (len(passed)):
                 print ('DUT[' + str(n) + '] PASS=' + str(passed[n]) + ' FAIL=' +
                        str(failed[n]) + ' TOTAL=' + str(int(args.cnt / 2)))
         else:
@@ -294,7 +294,7 @@ if __name__ == '__main__':
     parser.add_argument ('--cnt', help='Cycles to run')
     parser.add_argument ('--dut', help='DUT to test 0/1/both (default=both)')
     parser.add_argument ('--stop', help='Stop on first failure', action='store_true')
-    parser.add_argument ('--dump', help='Dump stats', action='store_true')
+    parser.add_argument ('--stat', help='Dump stats', action='store_true')
     parser.add_argument ('--plot', help='Plot stats', action='store_true')
 
     # Parameters for joulescope
