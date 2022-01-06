@@ -149,8 +149,7 @@ def run(args):
         args.cnt *= 2
 
         # Calculate overload current
-        # 100mA if delay enabled
-        current_overload = 0.1 if args.delay or (args.irange == 'auto') else args.irange_val
+        current_overload = args.ilimit if args.delay or (args.irange == 'auto') else args.irange_val
         
         # Loop over range
         for n in range (args.cnt):
@@ -305,6 +304,7 @@ if __name__ == '__main__':
     # Parameters for joulescope
     parser.add_argument ('--vrange', help='5V/15V')
     parser.add_argument ('--irange', help='auto/10A/2A/180mA/18mA/1.8mA/180uA/18uA')
+    parser.add_argument ('--ilimit', help='Max current to consider overcurrent')
     # Internal only - do not use
     parser.add_argument ('--irange_val', default=0.0, help=argparse.SUPPRESS)
     parser.add_argument ('--irange_unit', default='', help=argparse.SUPPRESS)
@@ -325,6 +325,10 @@ if __name__ == '__main__':
         args.off = 0.2
     if args.max:
         args.max = str2val (args.max)[0]
+    if args.ilimit:
+        args.ilimit = str2val (args.ilimit)[0]
+    else:
+        args.ilimit = 0.1 # 100mA default
 
     args.off = float (args.off)
     args.cnt = int (args.cnt)
